@@ -295,6 +295,8 @@ fork(void)
 
   np->state = RUNNABLE;
 
+  np->mask = p->mask; //将trace参数传递给子进程
+
   release(&np->lock);
 
   return pid;

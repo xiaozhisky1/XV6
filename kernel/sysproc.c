@@ -95,3 +95,15 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_trace(void)
+{
+  int mask;
+  if(argint(0, &mask) < 0)
+    return -1;
+
+  myproc()->mask = mask; //将系统调用参数传入到proc结构体中
+
+  return 0;
+}
