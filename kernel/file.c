@@ -92,9 +92,9 @@ filestat(struct file *f, uint64 addr)
   
   if(f->type == FD_INODE || f->type == FD_DEVICE){
     ilock(f->ip);
-    stati(f->ip, &st);
+    stati(f->ip, &st); //将文件f的iNode节点的一些信息传给st（该操作要加锁）
     iunlock(f->ip);
-    if(copyout(p->pagetable, addr, (char *)&st, sizeof(st)) < 0)
+    if(copyout(p->pagetable, addr, (char *)&st, sizeof(st)) < 0)//将st复制到addr
       return -1;
     return 0;
   }

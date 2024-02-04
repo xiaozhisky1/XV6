@@ -100,15 +100,15 @@ walkaddr(pagetable_t pagetable, uint64 va)
   if(va >= MAXVA)
     return 0;
 
-  pte = walk(pagetable, va, 0);
+  pte = walk(pagetable, va, 0); //获取虚拟地址va对应的页表项指针
   if(pte == 0)
     return 0;
-  if((*pte & PTE_V) == 0)
+  if((*pte & PTE_V) == 0) //如果页表项无效
     return 0;
-  if((*pte & PTE_U) == 0)
+  if((*pte & PTE_U) == 0) //如果对应的页表项不属于用户空间
     return 0;
-  pa = PTE2PA(*pte);
-  return pa;
+  pa = PTE2PA(*pte);//获取页表项指针对应的物理地址pa
+  return pa;  
 }
 
 // add a mapping to the kernel page table.
@@ -353,18 +353,18 @@ uvmclear(pagetable_t pagetable, uint64 va)
 // Return 0 on success, -1 on error.
 int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
-{
+{                  //页表        目标虚拟地址    源地址       要复制的字节数
   uint64 n, va0, pa0;
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
-    pa0 = walkaddr(pagetable, va0);
+    pa0 = walkaddr(pagetable, va0);//获取va0对应的物理地址
     if(pa0 == 0)
       return -1;
     n = PGSIZE - (dstva - va0);
     if(n > len)
       n = len;
-    memmove((void *)(pa0 + (dstva - va0)), src, n);
+    memmove((void *)(pa0 + (dstva - va0)), src, n); //将源地址中的n个字节复制到物理地址(dstva - va0 为偏移量)
 
     len -= n;
     src += n;

@@ -6,6 +6,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "sysinfo.h"
 
 uint64
 sys_exit(void)
@@ -105,5 +106,23 @@ sys_trace(void)
 
   myproc()->mask = mask; //将系统调用参数传入到proc结构体中
 
+  return 0;
+}
+
+uint64 
+sys_sysinfo(void){
+  uint64 addr;
+  struct sysinfo info;
+  struct proc *p = myproc();
+
+  if(argaddr(0, &addr) < 0) //获取系统调用传入参数的虚拟地址
+    return -1;
+  
+  info.freemem = free_mem();
+  info.nproc = nproc();
+
+  if(copyout(p->pagetable, addr, (char *)&info, sizeof(info)) < 0)//将info复制到addr
+      return -1;
+  
   return 0;
 }

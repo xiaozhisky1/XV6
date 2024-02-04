@@ -695,3 +695,27 @@ procdump(void)
     printf("\n");
   }
 }
+
+uint64
+nproc(void){
+  //struct proc *p;
+  uint64 num = 0;
+  // for(p = proc; p < &proc[NPROC]; p++){ 
+  //   //进程上锁
+  //   acquire(&p->lock);
+  //   if(p->state != UNUSED){
+  //       num++;
+  //   }
+  //   release(&p->lock);
+  // }
+
+  for(int i = 0; i < NPROC; i++){
+    acquire(&proc[i].lock);
+    if(proc[i].state != UNUSED){
+        num++;
+    }
+    release(&proc[i].lock);
+  }
+
+  return num;
+}
