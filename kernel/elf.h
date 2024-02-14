@@ -21,7 +21,7 @@ struct elfhdr {
   ushort shstrndx;
 };
 
-// Program section header
+// Program section header 每一个`proghdr`描述了应用的一个必须加载到内存中的程序段
 struct proghdr {
   uint32 type;
   uint32 flags;

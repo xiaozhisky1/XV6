@@ -23,7 +23,7 @@ exec(char *path, char **argv)
 
   begin_op();
 
-  if((ip = namei(path)) == 0){
+  if((ip = namei(path)) == 0){ // 使用 `namei`打开二进制文件路径
     end_op();
     return -1;
   }
@@ -35,7 +35,7 @@ exec(char *path, char **argv)
   if(elf.magic != ELF_MAGIC)
     goto bad;
 
-  if((pagetable = proc_pagetable(p)) == 0)
+  if((pagetable = proc_pagetable(p)) == 0)  // 使用`proc_pagetable`分配一个没有使用的页表
     goto bad;
 
   // Load program into memory.
@@ -49,12 +49,12 @@ exec(char *path, char **argv)
     if(ph.vaddr + ph.memsz < ph.vaddr)
       goto bad;
     uint64 sz1;
-    if((sz1 = uvmalloc(pagetable, sz, ph.vaddr + ph.memsz)) == 0)
+    if((sz1 = uvmalloc(pagetable, sz, ph.vaddr + ph.memsz)) == 0) // 使用 `uvmalloc`为每一个 ELF 段分配内存
       goto bad;
     sz = sz1;
     if(ph.vaddr % PGSIZE != 0)
       goto bad;
-    if(loadseg(pagetable, ph.vaddr, ip, ph.off, ph.filesz) < 0)
+    if(loadseg(pagetable, ph.vaddr, ip, ph.off, ph.filesz) < 0) // 使用 `loadseg`加载每一个段到内存中
       goto bad;
   }
   iunlockput(ip);
@@ -116,6 +116,10 @@ exec(char *path, char **argv)
   p->trapframe->sp = sp; // initial stack pointer
   proc_freepagetable(oldpagetable, oldsz);
 
+  if(p->pid == 1)
+    vmprint(p->pagetable);
+  //将用户空间映射到内核页表
+  setup_uvmkvm(p->pagetable, p->kernelpt, 0, p->sz);
   return argc; // this ends up in a0, the first argument to main(argc, argv)
 
  bad:
@@ -142,14 +146,14 @@ loadseg(pagetable_t pagetable, uint64 va, struct inode *ip, uint offset, uint sz
     panic("loadseg: va must be page aligned");
 
   for(i = 0; i < sz; i += PGSIZE){
-    pa = walkaddr(pagetable, va + i);
+    pa = walkaddr(pagetable, va + i); // 使用`walkaddr`找到分配内存的物理地址，在该地址写入 ELF 段的每一页
     if(pa == 0)
       panic("loadseg: address should exist");
     if(sz - i < PGSIZE)
       n = sz - i;
     else
       n = PGSIZE;
-    if(readi(ip, 0, (uint64)pa, offset+i, n) != n)
+    if(readi(ip, 0, (uint64)pa, offset+i, n) != n) // 页的内容通过 `readi` 从文件中读取
       return -1;
   }
   

@@ -20,9 +20,9 @@ static void wakeup1(struct proc *chan);
 static void freeproc(struct proc *p);
 
 extern char trampoline[]; // trampoline.S
-
-// initialize the proc table at boot time.
-void
+extern pagetable_t kernel_pagetable;// vm.c
+// initialize the proc table at boot time. 为每个进程分配一个内核栈
+void 
 procinit(void)
 {
   struct proc *p;
@@ -37,11 +37,11 @@ procinit(void)
       char *pa = kalloc();
       if(pa == 0)
         panic("kalloc");
-      uint64 va = KSTACK((int) (p - proc));
-      kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+      uint64 va = KSTACK((int) (p - proc));   //用`KSTACK` 生成虚拟地址，这就为栈守护页留下了空间
+      kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W); // 将每个栈映射在 `KSTACK` 生成的虚拟地址上，`kvmmap` 将对应的PTE加入到内核页表中
       p->kstack = va;
   }
-  kvminithart();
+  kvminithart(); // 调用 `kvminithart` 将内核页表重新加载到 `satp` 中，这样硬件就知道新的 PTE 了
 }
 
 // Must be called with interrupts disabled,
@@ -121,15 +121,40 @@ found:
     return 0;
   }
 
+  // 初始化内核页表
+  p->kernelpt = proc_kpt_init();
+  if(p->kernelpt == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+  
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+
+
+
   return p;
 }
-
+// 释放进程的内核页表（自己实现的），但不释放映射到的物理内存(目前的实现有问题，可能不能释放全部的页表)
+void proc_freekpt(pagetable_t pagetable){
+// 清空内核页表的用户进程空间页表项，但不释放对应物理页，由用户页表释放时处理
+  pagetable_t level1 = (pagetable_t)PTE2PA(pagetable[0]);
+  for (int i = 0; i < 512; i++){
+    pte_t *pte = &level1[i];
+    if(*pte & PTE_V){
+      kfree((void*)PTE2PA(*pte));
+      *pte = 0;
+    }
+  }
+  kfree((void*)level1);
+  // 用户内核页表剩余页表项是直接复制内核页表的，所以无需释放对应物理页，直接释放用户内核页表对应的物理页即可
+  kfree((void*)pagetable);
+}
 // free a proc structure and the data hanging from it,
 // including user pages.
 // p->lock must be held.
@@ -150,6 +175,10 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  // 释放内核页表
+  if(p->kernelpt)
+    proc_freekpt(p->kernelpt);
+  p->kernelpt = 0;
 }
 
 // Create a user page table for a given process,
@@ -230,11 +259,14 @@ userinit(void)
 
   p->state = RUNNABLE;
 
+  //将用户进程地址空间映射到用户内核页表当中
+  setup_uvmkvm(p->pagetable, p->kernelpt, 0, p->sz);
   release(&p->lock);
 }
 
 // Grow or shrink user memory by n bytes.
 // Return 0 on success, -1 on failure.
+//  `sbrk` 是一个进程收缩或增长内存的系统调用 ,该系统调用由growproc()实现
 int
 growproc(int n)
 {
@@ -242,13 +274,15 @@ growproc(int n)
   struct proc *p = myproc();
 
   sz = p->sz;
-  if(n > 0){
-    if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
+  if(n > 0){  // `growproc` 调用 `uvmalloc` 或 `uvmdealloc`，取决于 `n` 是正数还是负数
+    if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) { // 分配内存
       return -1;
     }
   } else if(n < 0){
-    sz = uvmdealloc(p->pagetable, sz, sz + n);
+    sz = uvmdealloc(p->pagetable, sz, sz + n); // 收缩内存
   }
+  //将用户进程地址空间映射到用户内核页表当中
+  setup_uvmkvm(p->pagetable, p->kernelpt, p->sz, sz);
   p->sz = sz;
   return 0;
 }
@@ -294,6 +328,8 @@ fork(void)
   pid = np->pid;
 
   np->state = RUNNABLE;
+  //将用户进程地址空间映射到用户内核页表当中
+  setup_uvmkvm(np->pagetable, np->kernelpt, 0, np->sz);
 
   release(&np->lock);
 
@@ -462,7 +498,7 @@ scheduler(void)
   c->proc = 0;
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
-    intr_on();
+    intr_on();// 开中断
     
     int found = 0;
     for(p = proc; p < &proc[NPROC]; p++) {
@@ -472,14 +508,21 @@ scheduler(void)
         // to release its lock and then reacquire it
         // before jumping back to us.
         p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
+        c->proc = p;// 将当前CPU的proc指正指向该进程
 
+        // 将进程的内核页表加载到核心的satp寄存器中
+        swtchkpt(p->kernelpt);
+      
+        swtch(&c->context, &p->context); //切换到该进程的上下文中执行
+
+        kvminithart();//没有进程时使用原来的内核页表
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
-
+        
         found = 1;
+        // uint64 level1 = PTE2PA(p->kernelpt[0]) ;
+        // vmprint((pagetable_t)level1);
       }
       release(&p->lock);
     }
@@ -696,4 +739,9 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+void
+swtchkpt(pagetable_t kpagetable){
+  w_satp(MAKE_SATP(kpagetable));
+  sfence_vma();
 }

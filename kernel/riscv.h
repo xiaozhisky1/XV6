@@ -334,8 +334,8 @@ sfence_vma()
 
 // shift a physical address to the right place for a PTE.
 #define PA2PTE(pa) ((((uint64)pa) >> 12) << 10)
-
-#define PTE2PA(pte) (((pte) >> 10) << 12)
+// 根据页表项获取物理地址pa
+#define PTE2PA(pte) (((pte) >> 10) << 12) //右移10位去掉标志位，左移12位获得全0的页内偏移量
 
 #define PTE_FLAGS(pte) ((pte) & 0x3FF)
 
@@ -350,5 +350,5 @@ sfence_vma()
 // that have the high bit set.
 #define MAXVA (1L << (9 + 9 + 9 + 12 - 1))
 
-typedef uint64 pte_t;
-typedef uint64 *pagetable_t; // 512 PTEs
+typedef uint64 pte_t; // 定义pte_t为新数据类型（实际上是uint64)
+typedef uint64 *pagetable_t; // 512 PTEs 定义一个指向uint64的指针类型
