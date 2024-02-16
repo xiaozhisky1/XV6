@@ -140,19 +140,18 @@ found:
 
   return p;
 }
-// 释放进程的内核页表（自己实现的），但不释放映射到的物理内存(目前的实现有问题，可能不能释放全部的页表)
+// 释放进程的内核页表（自己实现的），但不释放映射到的物理内存
 void proc_freekpt(pagetable_t pagetable){
-// 清空内核页表的用户进程空间页表项，但不释放对应物理页，由用户页表释放时处理
-  pagetable_t level1 = (pagetable_t)PTE2PA(pagetable[0]);
-  for (int i = 0; i < 512; i++){
-    pte_t *pte = &level1[i];
-    if(*pte & PTE_V){
-      kfree((void*)PTE2PA(*pte));
-      *pte = 0;
-    }
+   // there are 2^9 = 512 PTEs in a page table.
+  for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
+      // this PTE points to a lower-level page table.
+      uint64 child = PTE2PA(pte);
+      proc_freekpt((pagetable_t)child);
+      pagetable[i] = 0;
+    } 
   }
-  kfree((void*)level1);
-  // 用户内核页表剩余页表项是直接复制内核页表的，所以无需释放对应物理页，直接释放用户内核页表对应的物理页即可
   kfree((void*)pagetable);
 }
 // free a proc structure and the data hanging from it,
@@ -176,8 +175,10 @@ freeproc(struct proc *p)
   p->xstate = 0;
   p->state = UNUSED;
   // 释放内核页表
-  if(p->kernelpt)
-    proc_freekpt(p->kernelpt);
+  if(p->kernelpt){
+    proc_freekpt((pagetable_t)PTE2PA(p->kernelpt[0]));// 将映射到用户空间的页表传入
+    kfree((void*)p->kernelpt);
+  }
   p->kernelpt = 0;
 }
 

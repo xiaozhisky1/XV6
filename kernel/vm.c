@@ -477,7 +477,7 @@ void vmprint(pagetable_t pagetable){
 }
 
 void uvmmap(pagetable_t pagetable, uint64 va, uint64 pa, uint64 size, int perm){// 实现va->pa的映射
-  if(mappages(pagetable, va, size, pa,perm) != 0)
+  if (mappages(pagetable, va, size, pa, perm) != 0)
     panic("uvmmap");
 }
 
