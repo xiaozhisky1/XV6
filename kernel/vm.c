@@ -507,7 +507,7 @@ pagetable_t proc_kpt_init(){ // 创建一个和全局内核页表一样的页表
 }
 // 将用户空间映射到内核页表
 void setup_uvmkvm(pagetable_t pagetable, pagetable_t kernelpt, uint64 oldsz, uint64 newsz){
-  pte_t *pte, *kpte;
+  pte_t *pte, *kpte;                                           // 起始位置，        终止位置
   uint64 va;
 
   if (newsz >= PLIC)

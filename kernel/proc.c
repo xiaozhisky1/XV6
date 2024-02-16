@@ -180,6 +180,11 @@ freeproc(struct proc *p)
     kfree((void*)p->kernelpt);
   }
   p->kernelpt = 0;
+  /*
+  此处解释为何只释放用户空间：首先由于只有顶级页表的1-511项都是从内核页表复制来的，而这511项页表所对应的二级和三级页表，与真正的内核页表是共用的，
+  因此除了释放用户空间之外，把 p->kerneplt这一页释放即可
+  其次内核页表对应的虚拟空间非常巨大，以页一页的释放非常慢
+  */
 }
 
 // Create a user page table for a given process,
