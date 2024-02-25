@@ -121,6 +121,7 @@ panic(char *s)
   printf("panic: ");
   printf(s);
   printf("\n");
+  backtrace();
   panicked = 1; // freeze uart output from other CPUs
   for(;;)
     ;
@@ -131,4 +132,15 @@ printfinit(void)
 {
   initlock(&pr.lock, "pr");
   pr.locking = 1;
+}
+
+void backtrace(void) // 打印调用栈中的每一个地址，实际上可以讲这个栈看成 是一个链表
+{
+  printf("backtrace:\n");
+  uint64 fp = r_fp(); // r_fp()是头节点
+  while (PGROUNDDOWN(fp) != PGROUNDUP(fp))  // 一直遍历到当前 fp 是页对齐的即可
+  {
+    printf("%p\n", *(uint64 *)(fp - 8));// fp -8是 value， fp -16 是 next
+    fp = *(uint64*)(fp - 16);
+  }
 }

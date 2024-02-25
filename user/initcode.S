@@ -6,7 +6,8 @@
 # exec(init, argv)
 .globl start
 start:
-        la a0, init
+        # 用户代码将`exec`的参数放在寄存器`a0`和`a1`中，并将系统调用号放在`a7`中
+        la a0, init 
         la a1, argv
         li a7, SYS_exec
         ecall
